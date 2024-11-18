@@ -1,6 +1,8 @@
 # GMEGAN Code
 
-This repository contains the code for the GMEGAN method introduced in the paper *"Monotone Generative Modeling via a Gromov-Monge Embedding"* by Lee, Yang, You, and Lerman (2024).
+This repository contains the code for the GMEGAN method introduced in the paper *"Monotone Generative Modeling via a Gromov-Monge Embedding"* (2024)
+
+**Authors**: [Wonjun Lee](https://wonjunee.github.io/), Yifei Yang, [Dongmian Zou](https://scholars.duke.edu/person/Dongmian.Zou), and [Gilad Lerman](https://www-users.cse.umn.edu/~lerman/)
 
 **Paper link**: [https://arxiv.org/pdf/2311.01375](https://arxiv.org/pdf/2311.01375)
 
