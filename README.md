@@ -6,16 +6,51 @@ This repository contains the code for the GMEGAN method introduced in the paper 
 
 ## Overview
 
-This repository implements the GMEGAN method, designed for training on the CIFAR10 dataset. The main components are:
+This repository provides implementations of the GMEGAN method and other GAN-based methods. It supports training on both artificial datasets (e.g., mixtures of Gaussians) and the CIFAR10 dataset. Key components include:
 
+- `training_multiple_GAN_gaussian.py`: Python script for training multiple GAN-based methods on an artificial dataset.
 - `training_GMEGAN_CIFAR.py`: Python script for training GMEGAN on the CIFAR10 dataset.
 - `transportmodules/`: Directory containing neural network architectures for generators and discriminators used in the GAN methods described in the paper.
 
 ## How to Run
 
-The code is configured to train GMEGAN on the CIFAR10 dataset. To train on a different dataset, update the `preprocessing_data` function to replace the CIFAR10 dataset with your dataset.
+### Training on an Artificial Dataset (Mixture of Gaussians)
 
-### Steps to Run the Code
+This script runs multiple GAN-based methods simultaneously on an artificial dataset comprising a mixture of Gaussians. The included GAN-based methods are:
+
+- **GMEGAN (Ours)**  
+- **GAN**  
+  Ian Goodfellow et al., *Generative Adversarial Nets*, 2014  
+- **WGAN**  
+  Martin Arjovsky, Soumith Chintala, and Léon Bottou, *Wasserstein Generative Adversarial Networks*, 2017  
+- **WGAN-GP**  
+  Ishaan Gulrajani et al., *Improved Training of Wasserstein GANs*, 2017  
+- **WDIV**  
+  Jiqing Wu et al., *Wasserstein Divergence for GANs*, 2018  
+- **OTM**  
+  Litu Rout, Alexander Korotin, and Evgeny Burnaev, *Generative Modeling with Optimal Transport Maps*, 2022  
+- **VAEGAN**  
+  Anders Boesen Lindbo Larsen et al., *Autoencoding Beyond Pixels Using a Learned Similarity Metric*, 2016  
+- **VEEGAN**  
+  Akash Srivastava et al., *VEEGAN: Reducing Mode Collapse in GANs Using Implicit Variational Learning*, 2017
+
+#### Steps to Run the Code
+
+1. Clone the repository:
+   ```bash
+   git clone https://github.com/wonjunee/GMEGAN/
+   ```
+
+2. Run the training script:
+   ```bash
+   python training_multiple_GAN_gaussian.py
+   ```
+
+### Training on an Image Dataset (CIFAR10)
+
+The GMEGAN code is preconfigured for training on the CIFAR10 dataset. To train on a different dataset, modify the `preprocessing_data` function to replace the CIFAR10 dataset with your desired dataset.
+
+#### Steps to Run the Code
 
 1. Clone the repository:
    ```bash
@@ -26,6 +61,7 @@ The code is configured to train GMEGAN on the CIFAR10 dataset. To train on a dif
    ```bash
    python training_GMEGAN_CIFAR.py
    ```
+
 
 ## Copyright and License Notice
 © 2024 Regents of the University of Minnesota and Duke Kunshan University
