@@ -23,6 +23,9 @@ import torch.nn.functional as F
 import torch.autograd as autograd
 import torch
 
+plt.rcParams['font.family'] = 'DeJavu Serif'
+plt.rcParams['font.serif'] = ['Times New Roman']
+
 latent_r = 1.8
 
 parser = argparse.ArgumentParser()
@@ -35,14 +38,12 @@ parser.add_argument('--plot_every', type=int, default=1000)
 parser.add_argument('--input_dim', type=int, default=100)
 
 # arguments for Gaussian mixture application
-parser.add_argument('--lr', type=float, default=1e-5)
+parser.add_argument('--lr', type=float, default=5e-4)
 
 opt = parser.parse_args()
 print(opt)
 
 def subplot_model(ind, ax, gs, T, S, x, z, latent_val, label_val, z_val_sizes, z_val_labels, title, centers):
-
-
     Tx = T(x, feature=True)
     Sz = S(z)
     Sz0 = S(latent_val)
@@ -63,8 +64,13 @@ def subplot_model(ind, ax, gs, T, S, x, z, latent_val, label_val, z_val_sizes, z
     ax = fig.add_subplot(gs[1,ind])
     ax.scatter(x[:,0],x[:,1],alpha=0.5,marker='o',c='black') # c=label_val,
     ax.scatter(Sz[:,0],Sz[:,1],s=z_val_sizes,alpha=0.4,marker='x',c=z_val_labels,cmap='gist_rainbow')
-    ax.set_title(f"$S_\\#\\nu$ from {title}")
-    ax.set_aspect('equal')
+    # ax.set_title(f"$S_\\#\\nu$ from {title}", fontsize=16)
+    if title == "GMEGAN":
+        ax.set_title(f"GMEGAN (ours)", fontsize=17)
+    else:
+        ax.set_title(f"{title}", fontsize=17)
+    # ax.set_aspect('equal')
+    ax.set_xlim([-3.3,4.7]); ax.set_ylim([-3.2,4.7])
 
     z = latent_val.numpy()
     
@@ -77,7 +83,7 @@ def subplot_model(ind, ax, gs, T, S, x, z, latent_val, label_val, z_val_sizes, z
     ax.scatter(z[:,0],z[:,1],alpha=0.5,marker='o',c=colors,cmap='tab20',vmin=0, vmax=max(centerind2label.values())) # c=label_val,
     ax.set_xlim([-latent_r,latent_r])
     ax.set_ylim([-latent_r,latent_r])
-    ax.set_title(f"$\\nu$ from {title}")
+    # ax.set_title(f"$\\nu$ from {title}", fontsize=20)
     ax.set_aspect('equal')
 
 sigma = opt.sigma
@@ -356,11 +362,13 @@ class Reconstructor(torch.nn.Module):
 def compute_gradient_penalty(D, real_samples, fake_samples):
     """Calculates the gradient penalty loss for WGAN GP"""
     # Random weight term for interpolation between real and fake samples
-    alpha = Tensor(np.random.random((real_samples.shape[0], 1)))
+
+    alpha = torch.rand((real_samples.shape[0], 1), device=device)
     # Get random interpolation between real and fake samples
     interpolates = (alpha * real_samples + ((1 - alpha) * fake_samples)).requires_grad_(True)
     d_interpolates = D(interpolates)
-    fake = Tensor(np.ones((real_samples.shape[0], 1))).requires_grad_(False)
+
+    fake = torch.ones((real_samples.shape[0], 1), device=device).requires_grad_(False)
     # Get gradient w.r.t. interpolates
     gradients = autograd.grad(
         outputs=d_interpolates,
@@ -380,7 +388,8 @@ def get_latent_samples(shape):
 # data simulation
 data, y, centers, centerind2label = create_dataset(n, opt.modes, input_dim)
 
-centers = Tensor(centers)
+
+centers = torch.tensor(centers, device=device)
 
 sample_size = 1000
 
@@ -391,10 +400,8 @@ lr =opt.lr
 b1 = 0.5
 b2 = 0.999
 
-# GWlist = ['GW', 'noGWnoS', 'GWnoS', 'noGW', 'GW2', 'GW3', 'GW4']
 GWlist = ['GMEGAN']
 titlelist =  [*GWlist, "GAN", "WGAN", "WGP", 'WDIV', "OTM", 'VAEGAN', 'VEEGAN']
-# titlelist =  [*GWlist, "GAN", "WGAN", "DIV"]
 timelist  = {title: 0  for title in titlelist}
 models    = {title: {} for title in titlelist}
 
@@ -486,14 +493,15 @@ def loss_function_VAE(x, x_hat, mean, log_var):
 # sample for plotting
 z_val = get_latent_samples((sample_size, z_dim))
 
-latent_val = np.zeros((1, z_dim))
+latent_val = torch.zeros((1, z_dim), device=device)
 
 while latent_val.shape[0] < sample_size:
-    latent_val_tmp = (np.random.rand(sample_size, z_dim)-0.5)*2*latent_r
+    latent_val_tmp = (torch.rand((sample_size, z_dim),device=device)-0.5)*2*latent_r
     check = ((latent_val_tmp**2).sum(1) < latent_r**2)
-    latent_val = np.concatenate((latent_val, latent_val_tmp[check]), 0)
+    latent_val = torch.cat((latent_val, latent_val_tmp[check]), 0)
 
-latent_val = Tensor(latent_val[1:,:])
+
+latent_val = latent_val[1:,:]
 
 z_val_labels  = z_val.norm(2,dim=1)
 z_val_labels, indices = torch.sort(z_val_labels, descending=True)
@@ -519,7 +527,8 @@ for it in pbar:
     y_mb = y[start_idx:start_idx + batch_size]
 
     # get data mini batch
-    x = Tensor(X_mb[:batch_size, :])
+
+    x = torch.tensor(X_mb[:batch_size, :], device=device)
     # x = x.double()
     y_s = y_mb[:batch_size]
 
@@ -535,8 +544,11 @@ for it in pbar:
         # -----------------
         #  Train Generator
         # -----------------
-        valid = Tensor(np.ones((x.shape[0],  1))).requires_grad_(False)
-        fake  = Tensor(np.zeros((x.shape[0], 1))).requires_grad_(False)
+
+
+
+        valid = torch.ones((x.shape[0],  1), device=device).requires_grad_(False)
+        fake  = torch.zeros((x.shape[0], 1), device=device).requires_grad_(False)
 
         optS.zero_grad()
 
@@ -584,8 +596,8 @@ for it in pbar:
         # ---------------------
         for _ in range(3):
             optT.zero_grad()
-            # z = Tensor(np.random.normal(0, 1, (x.shape[0], z_dim)))
-            # z = Tensor(np.random.rand(x.shape[0], z_dim)) *3 - 1.5 # Sample noise 
+
+
             z = get_latent_samples((x.shape[0],z_dim))
             # Generate a batch of images
             fake_imgs = S(z)
@@ -629,8 +641,8 @@ for it in pbar:
         # ---------------------
         for _ in range(2):
             optT.zero_grad()
-            # z = Tensor(np.random.normal(0, 1, (x.shape[0], z_dim)))
-            # z = Tensor(np.random.rand(x.shape[0], z_dim)) *3 - 1.5 # Sample noise 
+
+
             z = get_latent_samples((x.shape[0],z_dim))
             # Generate a batch of images
             fake_imgs = S(z)
@@ -683,8 +695,8 @@ for it in pbar:
             optT.zero_grad()
 
             # Sample noise as generator input
-            # z = Tensor(np.random.normal(0, 1, (x.shape[0], z_dim)))
-            # z = Tensor(np.random.rand(x.shape[0], z_dim)) *3 - 1.5 # Sample noise 
+
+
             z = get_latent_samples((x.shape[0],z_dim))
 
             # Generate a batch of images
@@ -696,13 +708,13 @@ for it in pbar:
             fake_validity = T(fake_imgs)
 
             # Compute W-div gradient penalty
-            real_grad_out = Tensor(np.ones((x.shape[0], 1))).requires_grad_(False)
+            real_grad_out = torch.ones((x.shape[0], 1), device=device).requires_grad_(False)
             real_grad = autograd.grad(
                 real_validity, x, real_grad_out, create_graph=True, retain_graph=True, only_inputs=True
             )[0]
             real_grad_norm = real_grad.view(real_grad.shape[0], -1).pow(2).sum(1) ** (p / 2)
 
-            fake_grad_out = Tensor(np.ones((fake_imgs.shape[0], 1))).requires_grad_(False)
+            fake_grad_out = torch.ones((fake_imgs.shape[0], 1), device=device).requires_grad_(False)
             fake_grad = autograd.grad(
                 fake_validity, fake_imgs, fake_grad_out, create_graph=True, retain_graph=True, only_inputs=True
             )[0]
@@ -747,8 +759,8 @@ for it in pbar:
         # ---------------------
         for _ in range(1):
             optT.zero_grad()
-            # z = Tensor(np.random.normal(0, 1, (x.shape[0], z_dim)))
-            # z = Tensor(np.random.rand(x.shape[0], z_dim)) *3 - 1.5 # Sample noise 
+
+
             z = get_latent_samples((x.shape[0],z_dim))
             loss = Loss(T, S, Q, z, x) 
             go_loss = GradientOptimality(T, S, Q, z)
@@ -761,8 +773,8 @@ for it in pbar:
         #  Train Generator
         # -----------------
         for _ in range(2):
-            # z = Tensor(np.random.normal(0, 1, (x.shape[0], z_dim)))
-            # z = Tensor(np.random.rand(x.shape[0], z_dim)) *3 - 1.5 # Sample noise 
+
+
             z = get_latent_samples((x.shape[0],z_dim))
             S_loss = -Loss(T, S, Q, z, x) 
             optS.zero_grad()
@@ -822,8 +834,11 @@ for it in pbar:
         optS   = models['VEEGAN']['optS']
         optphi = models['VEEGAN']['optphi']
 
-        valid = Tensor(np.ones((x.shape[0],  1))).requires_grad_(False)
-        fake  = Tensor(np.zeros((x.shape[0], 1))).requires_grad_(False)
+
+
+
+        valid = torch.ones((x.shape[0],  1), device=device).requires_grad_(False)
+        fake  = torch.zeros((x.shape[0], 1), device=device).requires_grad_(False)
 
         # -----------------
         #  Train T (reconstructor)
@@ -870,8 +885,11 @@ for it in pbar:
         # -----------------
         #  Train Generator
         # -----------------
-        valid = Tensor(np.ones((x.shape[0],  1))).requires_grad_(False)
-        fake  = Tensor(np.zeros((x.shape[0], 1))).requires_grad_(False)
+
+
+
+        valid = torch.ones((x.shape[0],  1),device=device).requires_grad_(False)
+        fake  = torch.zeros((x.shape[0], 1),device=device).requires_grad_(False)
 
         optphi.zero_grad()
         z = get_latent_samples((x.shape[0],z_dim))
@@ -920,8 +938,11 @@ for it in pbar:
         optS = model['optS']  
         optpsi = model['optpsi']
 
-        valid = Tensor(x.shape[0], 1).fill_(1.0).requires_grad_(False)
-        fake  = Tensor(x.shape[0], 1).fill_(0.0).requires_grad_(False)
+
+
+
+        valid = torch.ones((x.shape[0], 1), device=device).requires_grad_(False)
+        fake  = torch.zeros((x.shape[0], 1),device=device).requires_grad_(False)
         # -----------------
         #  Train T
         # -----------------
@@ -930,7 +951,8 @@ for it in pbar:
         mean, logvar = T.get_mean_and_var(x)
         # calculate KL loss
         KL_loss = - 0.5 * torch.sum(1+ logvar - mean**2 - logvar.exp())
-        epsilon = Tensor(np.random.randn(logvar.shape[0], logvar.shape[1]))
+
+        epsilon = torch.randn((logvar.shape[0], logvar.shape[1]), device=device)
         z = mean + logvar*epsilon
         x_hat = S(z)
         reproduction_loss = F.mse_loss(x_hat, x)
@@ -944,7 +966,8 @@ for it in pbar:
         optS.zero_grad()
         # Generate a batch of images
         mean, logvar = T.get_mean_and_var(x)
-        epsilon = Tensor(np.random.randn(x.shape[0], z_dim)).detach()
+
+        epsilon = torch.randn((x.shape[0], z_dim),device=device).detach()
         z = mean + logvar * epsilon
         z = z.detach()
         x_hat = S(z)
@@ -1020,11 +1043,13 @@ for it in pbar:
         x_noise = x_noise.requires_grad_(True)
         real_validity = psi(x_noise)
         fake_validity = psi(Sz)
-        real_grad_out  = Tensor(np.ones((x.shape[0], 1))).requires_grad_(False)
+
+        real_grad_out  = torch.ones((x.shape[0], 1),device=device).requires_grad_(False)
         real_grad      = autograd.grad( real_validity, x_noise, real_grad_out, create_graph=True, retain_graph=True, only_inputs=True )[0]
         real_grad_norm = real_grad.view(real_grad.shape[0], -1).pow(2).sum(1) ** (p/2) 
 
-        fake_grad_out  = Tensor(np.ones((Sz.shape[0], 1))).requires_grad_(False)
+
+        fake_grad_out  = torch.ones((Sz.shape[0], 1),device=device).requires_grad_(False)
         fake_grad      = autograd.grad( fake_validity, Sz, fake_grad_out, create_graph=True, retain_graph=True, only_inputs=True )[0]
         fake_grad_norm = fake_grad.view(fake_grad.shape[0], -1).pow(2).sum(1) ** (p/2)
 
@@ -1045,7 +1070,8 @@ for it in pbar:
     if (it+1) % plot_every == 0:
         # get generator example
         with torch.no_grad():
-            x = Tensor(real)
+
+            x = torch.tensor(real, device=device)
 
             ncols = 1 + len(titlelist)
             nrows = 3
