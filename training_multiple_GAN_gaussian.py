@@ -38,7 +38,7 @@ parser.add_argument('--plot_every', type=int, default=1000)
 parser.add_argument('--input_dim', type=int, default=100)
 
 # arguments for Gaussian mixture application
-parser.add_argument('--lr', type=float, default=5e-4)
+parser.add_argument('--lr', type=float, default=1e-3)
 
 opt = parser.parse_args()
 print(opt)
