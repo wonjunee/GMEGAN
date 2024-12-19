@@ -85,7 +85,6 @@ def subplot_model(ind, ax, gs, T, S, x, z, latent_val, label_val, z_val_sizes, z
     ax.set_ylim([-latent_r,latent_r])
     # ax.set_title(f"$\\nu$ from {title}", fontsize=20)
     ax.set_aspect('equal')
-
 sigma = opt.sigma
 
 def create_dataset(sample_size, n_mode=4, input_dim=3):
@@ -229,6 +228,20 @@ stop_adversary = opt.num_iter
 train_iter = opt.num_iter
 modes = opt.modes
 
+class Rinv(torch.nn.Module):
+    def __init__(self, x_dim = 100, z_dim = 100):
+        super().__init__()
+        self.model = nn.Sequential(
+            nn.Linear(x_dim, 128),
+            nn.LeakyReLU(0.2,True),
+            nn.Linear(128, 128),
+            nn.LeakyReLU(0.2,True),
+            nn.Linear(128, z_dim),
+        )
+    def forward(self, x):
+        x  = self.model(x)
+        return x  
+    
 class Discriminator(torch.nn.Module):
     def __init__(self, x_dim = 100):
         super(Discriminator, self).__init__()
@@ -273,10 +286,8 @@ class TransportT(torch.nn.Module):
         super(TransportT, self).__init__()
         self.model = nn.Sequential(
             nn.Linear(x_dim, 128),
-            # nn.BatchNorm1d(128),
             nn.LeakyReLU(0.2,True),
             nn.Linear(128, 128),
-            # nn.BatchNorm1d(128),
             nn.LeakyReLU(0.2,True),
             nn.Linear(128, 128),
         )
@@ -284,7 +295,6 @@ class TransportT(torch.nn.Module):
             nn.Linear(128, z_dim),
         )
         self.phi = nn.Sequential(
-            # nn.BatchNorm1d(128),
             nn.LeakyReLU(0.2,True),
             nn.Linear(z_dim, 1),
         )
@@ -410,9 +420,9 @@ for key in titlelist:
         models[key]['T']    = TransportT(x_dim=input_dim, z_dim=z_dim).to(device)
         models[key]['S']    = TransportG(z_dim=z_dim,     x_dim=input_dim).to(device)
         models[key]['psi']  = TransportT(x_dim=input_dim, z_dim=z_dim).to(device)
+        models[key]['Rinv'] = Rinv(x_dim=z_dim, z_dim=z_dim).to(device)
         models[key]['phi']  = Discriminator(x_dim=z_dim).to(device)
-        models[key]['optG'] = torch.optim.Adam([*models[key]['S'].parameters(),*models[key]['T'].parameters()], lr=1*lr, betas=(b1, b2))
-        models[key]['optS'] = torch.optim.Adam(models[key]['S'].parameters(), lr=1*lr, betas=(b1, b2))
+        models[key]['optG'] = torch.optim.Adam([*models[key]['S'].parameters(),*models[key]['T'].parameters(),*models[key]['Rinv'].parameters()], lr=1*lr, betas=(b1, b2))
         models[key]['optT'] = torch.optim.Adam(models[key]['T'].parameters(), lr=lr, betas=(b1, b2))
         models[key]['optpsi'] = torch.optim.Adam([*models[key]['psi'].parameters()],   lr=lr, betas=(b1, b2))
     elif 'VAEGAN' in key:
@@ -1006,6 +1016,7 @@ for it in pbar:
     def iterate_GMEGAN(model,x,c_T=1,c_R=1,c_S=1,noise_scale=0.0,eta=lambda x:x):
         T      = model['T']
         S      = model['S']
+        Rinv   = model['Rinv']
         psi    = model['psi']
         optG   = model['optG']
         optpsi = model['optpsi']
@@ -1025,9 +1036,10 @@ for it in pbar:
         z = get_latent_samples((x.shape[0],z_dim))
         Sz   = S(z)
         TSz  = T(Sz, feature=True)
-        STx = S(Tx);TSz  = T(Sz, feature=True);R_loss = F.mse_loss(z,TSz) + F.mse_loss(x,STx)
+        SRinvTx = S(Rinv(Tx));
+        TSz  = T(Sz, feature=True);R_loss = F.mse_loss(z,TSz);S_loss = F.mse_loss(x,SRinvTx)
         psi_loss = compute_psi_loss(psi, Sz, x)
-        loss = psi_loss +  R_loss * c_R + T_loss * c_T
+        loss = psi_loss +  R_loss * c_R + T_loss * c_T + S_loss * c_S
         loss.backward()
         optG.step()
 
@@ -1053,7 +1065,7 @@ for it in pbar:
         fake_grad      = autograd.grad( fake_validity, Sz, fake_grad_out, create_graph=True, retain_graph=True, only_inputs=True )[0]
         fake_grad_norm = fake_grad.view(fake_grad.shape[0], -1).pow(2).sum(1) ** (p/2)
 
-        k = 10
+        k = 5
         div_gp = torch.mean(real_grad_norm + fake_grad_norm) * k / 2
         loss  = - psi_loss + div_gp
         
@@ -1063,7 +1075,7 @@ for it in pbar:
         return T_loss
 
     start_time = time.time()
-    T_loss= iterate_GMEGAN(models['GMEGAN'], x, c_T=10, c_R=0.5, c_S=1, noise_scale=0, eta=lambda x:torch.log(1+x))
+    T_loss= iterate_GMEGAN(models['GMEGAN'], x, c_T=10, c_R=0.5, c_S=5, noise_scale=0, eta=lambda x:torch.log(1+x))
     timelist["GMEGAN"] = time.time() - start_time
 
     # plotting
